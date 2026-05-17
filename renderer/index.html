@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:;" />
+  <title>Scan2BIM Converter</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="titlebar">
+      <div class="traffic">
+        <button class="dot close"    data-action="close"    aria-label="Schließen"></button>
+        <button class="dot minimize" data-action="minimize" aria-label="Minimieren"></button>
+        <button class="dot maximize" data-action="maximize" aria-label="Maximieren"></button>
+      </div>
+      <div class="brand">SCAN2BIM</div>
+      <div class="lang">
+        <button class="lang-opt"        data-lang="de">DE</button>
+        <button class="lang-opt active" data-lang="en">EN</button>
+      </div>
+    </header>
+
+    <main class="card" id="card">
+      <section class="state state-idle" data-state="idle">
+        <div class="kicker">E57 → POTREE</div>
+        <div class="dropzone" id="dropzone">
+          <svg class="stack-icon" viewBox="0 0 48 48" fill="none" aria-hidden="true">
+            <rect x="10" y="10" width="22" height="22" rx="4" stroke="currentColor" stroke-width="1.6"/>
+            <rect x="16" y="16" width="22" height="22" rx="4" stroke="currentColor" stroke-width="1.6" opacity="0.6"/>
+          </svg>
+          <div class="dz-title" data-i18n="drop.idle">Punktwolke hier ablegen</div>
+          <div class="dz-sub">
+            <span data-i18n="drop.or">oder</span>
+            <button class="link" id="pickFileBtn" data-i18n="drop.pick">Datei wählen</button>
+            <span class="sep">·</span>
+            <span data-i18n="drop.only">nur .e57</span>
+          </div>
+        </div>
+        <div class="output-row">
+          <span class="field-label" data-i18n="target">ZIEL</span>
+          <span class="field-value placeholder" id="outputDisplayIdle" data-i18n="output.placeholder">Ausgabeordner wählen…</span>
+          <button class="link" id="pickOutputBtnIdle" data-i18n="pick">wählen</button>
+        </div>
+        <button class="cta cta-disabled" id="convertBtnIdle" disabled data-i18n="convert">Konvertieren</button>
+      </section>
+
+      <section class="state state-ready" data-state="ready" hidden>
+        <div class="kicker">E57 → POTREE</div>
+        <div class="file-block">
+          <svg class="stack-icon small" viewBox="0 0 48 48" fill="none" aria-hidden="true">
+            <rect x="10" y="10" width="22" height="22" rx="4" stroke="currentColor" stroke-width="1.6"/>
+            <rect x="16" y="16" width="22" height="22" rx="4" stroke="currentColor" stroke-width="1.6" opacity="0.6"/>
+          </svg>
+          <div class="file-name" id="readyFileName">—</div>
+          <div class="stats-row" id="readyStats">
+            <div class="stat"><span class="stat-label">GRÖSSE</span><span class="stat-value" id="statSize">—</span></div>
+            <div class="stat"><span class="stat-label">SCANS</span><span class="stat-value" id="statScans">—</span></div>
+            <div class="stat"><span class="stat-label">PUNKTE</span><span class="stat-value" id="statPoints">—</span></div>
+          </div>
+          <button class="link options-toggle">Optionen <span class="arrow">↓</span></button>
+        </div>
+        <div class="output-row">
+          <span class="field-label" data-i18n="target">ZIEL</span>
+          <span class="field-value" id="outputDisplayReady">—</span>
+          <button class="link" id="pickOutputBtnReady" data-i18n="change">ändern</button>
+        </div>
+        <button class="cta" id="convertBtnReady" data-i18n="convert">Konvertieren</button>
+      </section>
+
+      <section class="state state-running" data-state="running" hidden>
+        <div class="running-header">
+          <span class="kicker" data-i18n="running.title">KONVERTIERUNG LÄUFT</span>
+          <span class="active-pill"><span class="active-dot"></span><span data-i18n="running.active">AKTIV</span></span>
+        </div>
+        <div class="file-name muted" id="runningFileName">—</div>
+        <div class="percent-display"><span id="percentValue">0</span><span class="percent-sign">%</span></div>
+        <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+        <div class="stats-row running-stats">
+          <span id="pointsProgress">0 / 0 Punkte</span>
+          <span class="dot-sep"></span>
+          <span id="pointsRate">— Pkt/s</span>
+          <span class="dot-sep"></span>
+          <span id="remaining">~ —</span>
+        </div>
+        <div class="stage-row">
+          <span id="stageLabel">—</span>
+          <button class="link" id="logsBtn">Logs <span class="arrow">↑</span></button>
+        </div>
+        <button class="cta cta-danger" id="cancelBtn" data-i18n="cancel">Abbrechen</button>
+      </section>
+
+      <section class="state state-done" data-state="done" hidden>
+        <div class="pill pill-success" data-i18n="done.title">FERTIG</div>
+        <div class="status-icon icon-success" aria-hidden="true">
+          <svg viewBox="0 0 32 32" fill="none">
+            <circle cx="16" cy="16" r="14" stroke="currentColor" stroke-width="1.6"/>
+            <path d="M10 16.5l4 4 8-9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <div class="big-msg" data-i18n="done.msg">Konvertierung abgeschlossen</div>
+        <div class="muted small" id="doneFileName">—</div>
+        <div class="muted small accent" id="doneOutputPath">→ —</div>
+        <div class="stats-row done-stats">
+          <div class="stat"><span class="stat-label">DAUER</span><span class="stat-value" id="doneDuration">—</span></div>
+          <div class="stat"><span class="stat-label">AUSGABE</span><span class="stat-value" id="doneSize">—</span></div>
+          <div class="stat"><span class="stat-label">PUNKTE</span><span class="stat-value" id="donePoints">—</span></div>
+        </div>
+        <div class="button-row">
+          <button class="cta cta-secondary" id="newFileBtn" data-i18n="done.new">Neue Datei</button>
+          <button class="cta" id="openFolderBtn"><span class="folder-icon">📁</span> <span data-i18n="done.open">Ordner öffnen</span></button>
+        </div>
+      </section>
+
+      <section class="state state-error" data-state="error" hidden>
+        <div class="pill pill-error" data-i18n="error.title">FEHLER</div>
+        <div class="status-icon icon-error" aria-hidden="true">
+          <svg viewBox="0 0 32 32" fill="none">
+            <circle cx="16" cy="16" r="14" stroke="currentColor" stroke-width="1.6"/>
+            <path d="M16 10v8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+            <circle cx="16" cy="22" r="1.2" fill="currentColor"/>
+          </svg>
+        </div>
+        <div class="big-msg" data-i18n="error.msg">Konvertierung fehlgeschlagen</div>
+        <div class="muted small narrow" id="errorDetail" data-i18n="error.detail">
+          Beim Lesen der e57-Datei ist ein Fehler aufgetreten.
+          Möglicherweise ist sie beschädigt oder unvollständig.
+        </div>
+        <div class="error-code" id="errorCode">e57_ERR_BAD_HEADER · offset 0x4a2c</div>
+        <div class="button-row">
+          <button class="cta cta-secondary" id="openLogsBtn" data-i18n="error.logs">Logs öffnen</button>
+          <button class="cta" id="retryBtn" data-i18n="error.retry">Erneut versuchen</button>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
