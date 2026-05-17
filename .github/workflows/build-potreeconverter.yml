@@ -1,0 +1,76 @@
+name: Build PotreeConverter
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/build-potreeconverter.yml
+
+jobs:
+  build-macos-arm:
+    runs-on: macos-14
+    steps:
+      - name: Install build dependencies
+        run: brew install cmake tbb
+
+      - name: Clone PotreeConverter
+        run: git clone --depth 1 --branch 2.1.1 https://github.com/potree/PotreeConverter.git
+
+      - name: Configure
+        working-directory: PotreeConverter
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0
+
+      - name: Build
+        working-directory: PotreeConverter
+        run: cmake --build build --config Release -j $(sysctl -n hw.ncpu)
+
+      - name: Stage artifact tree
+        working-directory: PotreeConverter
+        run: |
+          mkdir -p dist
+          cp build/Converter/PotreeConverter dist/
+          cp -R build/Converter/resources dist/ 2>/dev/null || true
+          cp -R resources dist/resources 2>/dev/null || true
+          cp build/Converter/laszip.dylib dist/ 2>/dev/null || true
+          install_name_tool -add_rpath @executable_path dist/PotreeConverter || true
+          ls -la dist
+
+      - name: Upload PotreeConverter (macOS ARM)
+        uses: actions/upload-artifact@v4
+        with:
+          name: potreeconverter-darwin-arm64
+          path: PotreeConverter/dist/
+          retention-days: 90
+
+  build-linux-x64:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Install build dependencies
+        run: sudo apt-get update && sudo apt-get install -y cmake build-essential libtbb-dev
+
+      - name: Clone PotreeConverter
+        run: git clone --depth 1 --branch 2.1.1 https://github.com/potree/PotreeConverter.git
+
+      - name: Configure
+        working-directory: PotreeConverter
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        working-directory: PotreeConverter
+        run: cmake --build build --config Release -j $(nproc)
+
+      - name: Stage artifact tree
+        working-directory: PotreeConverter
+        run: |
+          mkdir -p dist
+          cp build/Converter/PotreeConverter dist/
+          cp -R resources dist/resources 2>/dev/null || true
+          cp build/Converter/laszip.so dist/ 2>/dev/null || true
+          ls -la dist
+
+      - name: Upload PotreeConverter (Linux x64)
+        uses: actions/upload-artifact@v4
+        with:
+          name: potreeconverter-linux-x64
+          path: PotreeConverter/dist/
+          retention-days: 90
