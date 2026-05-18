@@ -16,6 +16,34 @@ jobs:
       - name: Clone PotreeConverter
         run: git clone --depth 1 --branch 2.1.1 https://github.com/potree/PotreeConverter.git
 
+      - name: Patch PotreeConverter for macOS
+        working-directory: PotreeConverter
+        run: |
+          set -euxo pipefail
+
+          # 1. unsuck_platform_specific.cpp only handles Windows + Linux. Make
+          #    the Linux block apply on macOS, then alias the *64 stdio
+          #    functions to their plain counterparts (macOS fseeko is already
+          #    64-bit, no separate fseeko64 exists).
+          PSF=Converter/modules/unsuck/unsuck_platform_specific.cpp
+          sed -i.bak 's/#elif defined(__linux__)/#elif defined(__linux__) || defined(__APPLE__)/' "$PSF"
+          # Apply *64 -> plain on the just-enabled block. macOS doesn't have
+          # the *64 variants; Linux still does but it also accepts the plain
+          # ones (which are 64-bit on Linux when _FILE_OFFSET_BITS=64). Safe
+          # global replace.
+          sed -i.bak2 's/fseeko64/fseeko/g; s/ftello64/ftello/g; s/fopen64/fopen/g' "$PSF"
+
+          # 2. AppleClang's libc++ ships <execution> but not the par /
+          #    par_unseq policies (those need TBB-backed parallel algorithms
+          #    that Apple doesn't link). Replace with seq for a serial fallback.
+          find Converter -type f \( -name '*.h' -o -name '*.hpp' -o -name '*.cpp' \) -print0 \
+            | xargs -0 sed -i.bak3 -e 's/std::execution::par_unseq/std::execution::seq/g' \
+                                   -e 's/std::execution::par\b/std::execution::seq/g'
+
+          # 3. AppleClang flags narrowing int64->int32 conversions in the
+          #    Point aggregate initializer in sampler_poisson.h. Cast explicitly.
+          sed -i.bak4 's/Point point = { x, y, z, i, childIndex };/Point point = { x, y, z, static_cast<int32_t>(i), static_cast<int32_t>(childIndex) };/' Converter/include/sampler_poisson.h
+
       - name: Diagnose TBB layout
         run: |
           echo "=== brew prefix ==="
