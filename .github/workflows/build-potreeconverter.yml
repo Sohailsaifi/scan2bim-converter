@@ -16,16 +16,41 @@ jobs:
       - name: Clone PotreeConverter
         run: git clone --depth 1 --branch 2.1.1 https://github.com/potree/PotreeConverter.git
 
+      - name: Diagnose TBB layout
+        run: |
+          echo "=== brew prefix ==="
+          brew --prefix
+          echo "=== brew --prefix tbb ==="
+          brew --prefix tbb
+          echo "=== brew info tbb ==="
+          brew info tbb || true
+          echo "=== ls tbb cellar lib ==="
+          ls -la "$(brew --prefix tbb)/lib/" 2>&1 | head -20
+          echo "=== look for TBBConfig.cmake / tbb-config.cmake anywhere under tbb prefix ==="
+          find "$(brew --prefix tbb)" -name '*Config.cmake' -o -name '*config.cmake' 2>/dev/null | head -20
+          echo "=== look for TBB cmake under homebrew prefix ==="
+          find "$(brew --prefix)" -name 'TBBConfig.cmake' 2>/dev/null | head -10
+
       - name: Configure
         working-directory: PotreeConverter
         run: |
+          BREW_PREFIX="$(brew --prefix)"
           TBB_PREFIX="$(brew --prefix tbb)"
-          echo "TBB at: $TBB_PREFIX"
-          cmake -B build \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0 \
-            -DCMAKE_PREFIX_PATH="$TBB_PREFIX" \
-            -DTBB_DIR="$TBB_PREFIX/lib/cmake/TBB"
+          TBB_CMAKE_DIR=""
+          for cand in "$TBB_PREFIX/lib/cmake/TBB" "$TBB_PREFIX/lib/cmake/tbb" "$TBB_PREFIX/lib/cmake"; do
+            if [ -d "$cand" ]; then TBB_CMAKE_DIR="$cand"; break; fi
+          done
+          echo "Using BREW_PREFIX=$BREW_PREFIX  TBB_PREFIX=$TBB_PREFIX  TBB_CMAKE_DIR=$TBB_CMAKE_DIR"
+          CMAKE_ARGS=(
+            -B build
+            -DCMAKE_BUILD_TYPE=Release
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0
+            "-DCMAKE_PREFIX_PATH=$TBB_PREFIX;$BREW_PREFIX"
+          )
+          if [ -n "$TBB_CMAKE_DIR" ]; then
+            CMAKE_ARGS+=("-DTBB_DIR=$TBB_CMAKE_DIR")
+          fi
+          cmake "${CMAKE_ARGS[@]}"
 
       - name: Build
         working-directory: PotreeConverter
