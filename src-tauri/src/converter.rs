@@ -200,9 +200,14 @@ async fn run_pdal_translate(
     pipe_lines("pdal stderr", child.stderr.take().unwrap());
 
     let total_points_est = estimate_points(input);
+    let input_bytes = std::fs::metadata(input).map(|m| m.len()).unwrap_or(0);
+    // E57 -> uncompressed LAS observed ratio ~2.5x (271 MB E57 -> 680 MB LAS in our test).
+    let estimated_las_bytes = (input_bytes as f64 * 2.5) as u64;
+    let output_path = output.to_path_buf();
 
-    // PDAL translate doesn't emit useful per-percent progress; show time-based estimate
-    // capped at 45% so stage 2 starts visibly.
+    // Poll the temp LAS file size to drive real progress. PDAL writes points to it
+    // monotonically as it reads the E57. Map current/estimated to 0-48% so the
+    // PotreeConverter stage starts at a clearly different position.
     let progress_task = {
         let app = app.clone();
         let job_id = job_id.to_string();
@@ -210,21 +215,33 @@ async fn run_pdal_translate(
         tokio::spawn(async move {
             loop {
                 if cancel.load(Ordering::SeqCst) { return; }
-                let elapsed_secs = started.elapsed().as_secs_f64();
-                // assume ~1 MB/s on the I/O path; never exceed 48%
-                let est_pct = (elapsed_secs * 0.5).min(48.0);
+                let current_bytes = std::fs::metadata(&output_path).map(|m| m.len()).unwrap_or(0);
+                let raw_pct = if estimated_las_bytes > 0 {
+                    (current_bytes as f64 / estimated_las_bytes as f64) * 100.0
+                } else {
+                    let elapsed_secs = started.elapsed().as_secs_f64();
+                    elapsed_secs * 0.5
+                };
+                let mapped_pct = (raw_pct * 0.48).min(48.0);
+                let elapsed_ms = started.elapsed().as_millis() as u64;
+                let bytes_per_sec = if elapsed_ms > 0 {
+                    current_bytes as f64 / (elapsed_ms as f64 / 1000.0)
+                } else { 0.0 };
+                let remaining_ms = if mapped_pct > 1.0 && mapped_pct < 48.0 {
+                    Some(((elapsed_ms as f64 / mapped_pct) * (48.0 - mapped_pct)) as u64)
+                } else { None };
                 let _ = app.emit("convert:progress", ProgressPayload {
                     job_id: job_id.clone(),
-                    percent: est_pct,
-                    points_done: ((est_pct / 100.0) * total_points_est as f64) as u64,
+                    percent: mapped_pct,
+                    points_done: ((raw_pct.min(100.0) / 100.0) * total_points_est as f64) as u64,
                     points_total: total_points_est,
-                    points_per_sec: 0.0,
-                    remaining_ms: None,
+                    points_per_sec: bytes_per_sec / 12.0,
+                    remaining_ms,
                     stage_index: 0,
                     stage_total: 2,
                     stage_label: "Reading E57 (PDAL)".into(),
                 });
-                tokio::time::sleep(std::time::Duration::from_millis(800)).await;
+                tokio::time::sleep(std::time::Duration::from_millis(600)).await;
             }
         })
     };

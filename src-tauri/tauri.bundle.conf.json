@@ -1,0 +1,11 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "bundle": {
+    "resources": {
+      "../binaries/PotreeConverter.exe": "binaries/",
+      "../binaries/laszip.dll": "binaries/",
+      "../binaries/pdal/bin": "binaries/pdal/bin",
+      "../binaries/pdal/share": "binaries/pdal/share"
+    }
+  }
+}

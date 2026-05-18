@@ -59,10 +59,28 @@ const i18n = {
   },
 };
 
-let lang = 'en';
+const PREFS_KEY = 'scan2bim:prefs:v1';
+
+function loadPrefs() {
+  try {
+    const raw = localStorage.getItem(PREFS_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+function savePrefs() {
+  try {
+    localStorage.setItem(PREFS_KEY, JSON.stringify({ lang, outputDir }));
+  } catch {}
+}
+
+const prefs = loadPrefs();
+let lang = prefs.lang === 'de' ? 'de' : 'en';
 let currentState = 'idle';
 let inputFile = null;
-let outputDir = null;
+let outputDir = prefs.outputDir ?? null;
 let lastDoneOutput = null;
 
 function t(key) { return i18n[lang][key] ?? key; }
@@ -131,8 +149,15 @@ document.querySelectorAll('.lang-opt').forEach((el) => {
     lang = el.dataset.lang;
     applyI18n();
     refreshOutputDisplay();
+    savePrefs();
   });
 });
+
+function applyInitialLang() {
+  document.querySelectorAll('.lang-opt').forEach((el) => {
+    el.classList.toggle('active', el.dataset.lang === lang);
+  });
+}
 
 const appEl = document.querySelector('.app');
 
@@ -171,6 +196,7 @@ document.getElementById('pickFileBtn').addEventListener('click', async () => {
     outputDir = dir;
     refreshOutputDisplay();
     refreshReadyCTA();
+    savePrefs();
   });
 });
 
@@ -220,6 +246,7 @@ async function startConvert() {
     outputDir = dir;
     refreshOutputDisplay();
     refreshReadyCTA();
+    savePrefs();
   }
   setState('running');
   document.getElementById('runningFileName').textContent = inputFile.name;
@@ -293,6 +320,7 @@ document.getElementById('retryBtn').addEventListener('click', () => {
 document.getElementById('openLogsBtn').addEventListener('click', () => {});
 document.getElementById('logsBtn').addEventListener('click', () => {});
 
+applyInitialLang();
 applyI18n();
 refreshOutputDisplay();
 refreshReadyCTA();
