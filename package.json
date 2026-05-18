@@ -7,7 +7,7 @@
   "private": true,
   "scripts": {
     "dev": "tauri dev",
-    "build": "tauri build --config src-tauri/tauri.bundle.conf.json"
+    "build": "tauri build --config src-tauri/tauri.bundle.conf.json && powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-windows.ps1"
   },
   "devDependencies": {
     "@tauri-apps/cli": "2.1.0"

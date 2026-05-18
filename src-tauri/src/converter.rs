@@ -7,6 +7,21 @@ use tauri::{AppHandle, Emitter};
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::{Child, Command};
 
+#[cfg(windows)]
+const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
+fn hide_console(cmd: &mut Command) {
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = cmd;
+    }
+}
+
 pub struct JobHandle {
     pub id: String,
     cancel_flag: Arc<AtomicBool>,
@@ -190,6 +205,7 @@ async fn run_pdal_translate(
     cmd.arg("translate").arg(input).arg(output);
     apply_pdal_env(&mut cmd, pdal);
     cmd.stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::piped());
+    hide_console(&mut cmd);
 
     let mut child = cmd.spawn().map_err(|e| {
         eprintln!("[pdal] SPAWN FAILED: {}", e);
@@ -289,17 +305,18 @@ async fn run_potree_converter(
     eprintln!("[potree] SPAWN: {} -i {:?} -o {:?} --encoding BROTLI",
         binary.display(), input_las.display(), output_dir.display());
 
-    let mut child = Command::new(binary)
+    let mut potree_cmd = Command::new(binary);
+    potree_cmd
         .arg("-i").arg(input_las)
         .arg("-o").arg(output_dir)
         .arg("--encoding").arg("BROTLI")
         .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
-        .spawn()
-        .map_err(|e| {
-            eprintln!("[potree] SPAWN FAILED: {}", e);
-            StageError::Failed("potree_spawn_failed".into(), e.to_string())
-        })?;
+        .stderr(std::process::Stdio::piped());
+    hide_console(&mut potree_cmd);
+    let mut child = potree_cmd.spawn().map_err(|e| {
+        eprintln!("[potree] SPAWN FAILED: {}", e);
+        StageError::Failed("potree_spawn_failed".into(), e.to_string())
+    })?;
 
     pipe_lines("potree stderr", child.stderr.take().unwrap());
 
