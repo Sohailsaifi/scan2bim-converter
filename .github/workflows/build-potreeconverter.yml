@@ -45,6 +45,7 @@ jobs:
             -B build
             -DCMAKE_BUILD_TYPE=Release
             -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0
+            -DCMAKE_POLICY_VERSION_MINIMUM=3.5
             "-DCMAKE_PREFIX_PATH=$TBB_PREFIX;$BREW_PREFIX"
           )
           if [ -n "$TBB_CMAKE_DIR" ]; then
