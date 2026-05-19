@@ -21,43 +21,54 @@ jobs:
         run: |
           set -euxo pipefail
 
-          # 1. Extend the Linux #ifdef block to apply on macOS too. Header AND
-          #    platform-specific .cpp both gate on __linux__; both need __APPLE__
-          #    added. macOS doesn't have fseeko64/ftello64/fopen64 - alias to
-          #    the plain names which are already 64-bit on macOS.
+          # 1. The header uses '#if defined(__linux__)' (not '#elif'). Match
+          #    the bare predicate so both #if and #elif forms get widened to
+          #    also cover macOS. macOS doesn't have fseeko64/ftello64/fopen64,
+          #    alias them to plain (already 64-bit on macOS).
           for f in Converter/modules/unsuck/unsuck.hpp Converter/modules/unsuck/unsuck_platform_specific.cpp; do
-            sed -i.bak1 's/#elif defined(__linux__)/#elif defined(__linux__) || defined(__APPLE__)/g' "$f"
+            sed -i.bak1 's/defined(__linux__)/defined(__linux__) || defined(__APPLE__)/g' "$f"
             sed -i.bak2 's/fseeko64/fseeko/g; s/ftello64/ftello/g; s/fopen64/fopen/g' "$f"
           done
 
-          # 2. AppleClang's libc++ has NO std::execution policies at all
-          #    (not seq, par, or par_unseq - the parallel algorithms TBB
-          #    backend isn't shipped). Replace the policy declarations with
-          #    a no-op marker, and strip the leading 'parallel,' argument
-          #    from algorithm calls so the calls fall back to serial overloads.
+          # 2. AppleClang's libc++ has NO std::execution policies at all.
+          #    Neuter the declaration; strip the leading 'parallel,' argument
+          #    from algorithm calls (both with and without std:: prefix --
+          #    PotreeConverter uses 'using namespace std' so plenty of calls
+          #    are bare for_each(parallel, ...)).
           find Converter -type f \( -name '*.h' -o -name '*.hpp' -o -name '*.cpp' \) -print0 \
             | xargs -0 sed -i.bak3 \
-                -e 's|auto parallel = std::execution::[a-zA-Z_]*;|[[maybe_unused]] int parallel = 0;|g' \
-                -e 's|std::for_each(parallel,|std::for_each(|g' \
-                -e 's|std::sort(parallel,|std::sort(|g' \
-                -e 's|std::transform(parallel,|std::transform(|g' \
-                -e 's|std::any_of(parallel,|std::any_of(|g' \
-                -e 's|std::all_of(parallel,|std::all_of(|g' \
-                -e 's|std::none_of(parallel,|std::none_of(|g' \
-                -e 's|std::reduce(parallel,|std::reduce(|g' \
-                -e 's|std::find(parallel,|std::find(|g' \
-                -e 's|std::accumulate(parallel,|std::accumulate(|g' \
-                -e 's|std::count(parallel,|std::count(|g' \
-                -e 's|std::count_if(parallel,|std::count_if(|g'
+                -e 's|auto parallel = std::execution::[a-zA-Z_]*;|[[maybe_unused]] int parallel = 0;|g'
 
-          # 3. AppleClang flags narrowing int64->int32 in sampler_poisson.h:103.
-          sed -i.bak4 's/Point point = { x, y, z, i, childIndex };/Point point = { x, y, z, static_cast<int32_t>(i), static_cast<int32_t>(childIndex) };/' Converter/include/sampler_poisson.h
+          find Converter -type f \( -name '*.h' -o -name '*.hpp' -o -name '*.cpp' \) -print0 \
+            | xargs -0 sed -i.bak4 \
+                -e 's|for_each(parallel,|for_each(|g' \
+                -e 's|sort(parallel,|sort(|g' \
+                -e 's|transform(parallel,|transform(|g' \
+                -e 's|any_of(parallel,|any_of(|g' \
+                -e 's|all_of(parallel,|all_of(|g' \
+                -e 's|none_of(parallel,|none_of(|g' \
+                -e 's|reduce(parallel,|reduce(|g' \
+                -e 's|find(parallel,|find(|g' \
+                -e 's|accumulate(parallel,|accumulate(|g' \
+                -e 's|count(parallel,|count(|g' \
+                -e 's|count_if(parallel,|count_if(|g'
 
-          # 4. Final sanity: confirm the patches stuck
-          echo "=== still mentioning std::execution after patch? ==="
-          grep -rn 'std::execution' Converter | head -10 || true
-          echo "=== still calling fseek_64_all_platforms after patch? ==="
-          grep -rn 'fseek_64_all_platforms' Converter | head -10 || true
+          # 3. Narrowing fix in sampler_poisson.h.
+          sed -i.bak5 's/Point point = { x, y, z, i, childIndex };/Point point = { x, y, z, static_cast<int32_t>(i), static_cast<int32_t>(childIndex) };/' Converter/include/sampler_poisson.h
+
+          # 4. Drop the noisy *.bak files so sanity grep + the eventual
+          #    build don't include them.
+          find Converter -name '*.bak*' -delete
+
+          # 5. Final sanity grep (excludes any .bak crud left by sed -i.bak).
+          echo "=== std::execution survivors (should be empty) ==="
+          grep -rn 'std::execution' Converter --include='*.h' --include='*.hpp' --include='*.cpp' | head -10 || true
+          echo "=== for_each(parallel, survivors (should be empty) ==="
+          grep -rn 'for_each(parallel,' Converter --include='*.h' --include='*.hpp' --include='*.cpp' | head -10 || true
+          echo "=== fseek_64_all_platforms decl/call sites ==="
+          grep -rn 'fseek_64_all_platforms' Converter --include='*.h' --include='*.hpp' --include='*.cpp' | head -20 || true
+          echo "=== #if defined(__linux__) / #elif defined(__linux__) survivors ==="
+          grep -rn 'defined(__linux__)' Converter --include='*.h' --include='*.hpp' --include='*.cpp' | grep -v '__APPLE__' | head -10 || true
 
       - name: Configure
         working-directory: PotreeConverter
