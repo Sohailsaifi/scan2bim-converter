@@ -43,6 +43,7 @@ jobs:
             -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0
             -DCMAKE_POLICY_VERSION_MINIMUM=3.5
             "-DCMAKE_PREFIX_PATH=$TBB_PREFIX;$BREW_PREFIX"
+            "-DCMAKE_CXX_FLAGS=-Wno-c++11-narrowing -Wno-error -Wno-deprecated-declarations"
           )
           if [ -n "$TBB_CMAKE_DIR" ]; then CMAKE_ARGS+=("-DTBB_DIR=$TBB_CMAKE_DIR"); fi
           cmake "${CMAKE_ARGS[@]}"

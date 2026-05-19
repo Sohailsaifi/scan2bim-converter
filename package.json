@@ -7,7 +7,13 @@
   "private": true,
   "scripts": {
     "dev": "tauri dev",
-    "build": "tauri build --config src-tauri/tauri.bundle.conf.json && powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-windows.ps1"
+    "build": "tauri build --config src-tauri/tauri.bundle.conf.json",
+    "package:windows": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-windows.ps1",
+    "package:linux":   "bash scripts/package-linux.sh",
+    "package:macos":   "bash scripts/package-macos.sh",
+    "build:windows": "npm run build && npm run package:windows",
+    "build:linux":   "npm run build && npm run package:linux",
+    "build:macos":   "npm run build && npm run package:macos"
   },
   "devDependencies": {
     "@tauri-apps/cli": "2.1.0"
