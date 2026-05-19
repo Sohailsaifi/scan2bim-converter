@@ -21,14 +21,34 @@ jobs:
         run: |
           set -euxo pipefail
 
-          # 1. The header uses '#if defined(__linux__)' (not '#elif'). Match
-          #    the bare predicate so both #if and #elif forms get widened to
-          #    also cover macOS. macOS doesn't have fseeko64/ftello64/fopen64,
-          #    alias them to plain (already 64-bit on macOS).
-          for f in Converter/modules/unsuck/unsuck.hpp Converter/modules/unsuck/unsuck_platform_specific.cpp; do
-            sed -i.bak1 's/defined(__linux__)/defined(__linux__) || defined(__APPLE__)/g' "$f"
-            sed -i.bak2 's/fseeko64/fseeko/g; s/ftello64/ftello/g; s/fopen64/fopen/g' "$f"
-          done
+          # 1a. Header: widen __linux__ to also cover __APPLE__ so
+          #     fseek_64_all_platforms is declared on macOS. Alias *64 stdio.
+          HDR=Converter/modules/unsuck/unsuck.hpp
+          sed -i.bak1 's/defined(__linux__)/defined(__linux__) || defined(__APPLE__)/g' "$HDR"
+          sed -i.bak2 's/fseeko64/fseeko/g; s/ftello64/ftello/g; s/fopen64/fopen/g' "$HDR"
+
+          # 1b. unsuck_platform_specific.cpp: do NOT widen the Linux block,
+          #     it uses sys/sysinfo.h and /proc/self/status which don't exist
+          #     on macOS. Instead, insert a fresh #elif __APPLE__ block right
+          #     before the final #endif with stub implementations of the public
+          #     symbols (getMemoryData/printMemoryReport/launchMemoryChecker/
+          #     init/getCpuData). PotreeConverter still runs end-to-end on
+          #     macOS; only the live RAM/CPU stat readouts are no-ops.
+          PSF=Converter/modules/unsuck/unsuck_platform_specific.cpp
+          LAST_ENDIF=$(grep -n '^#endif' "$PSF" | tail -1 | cut -d: -f1)
+          head -n $((LAST_ENDIF - 1)) "$PSF" > "$PSF.tmp"
+          cat <<'STUBS' >> "$PSF.tmp"
+
+#elif defined(__APPLE__)
+// macOS stubs - no live memory / CPU stats but everything else works.
+MemoryData getMemoryData() { return MemoryData{}; }
+void printMemoryReport() {}
+void launchMemoryChecker(int64_t maxMB, double checkInterval) {}
+void init() {}
+CpuData getCpuData() { return CpuData{}; }
+STUBS
+          tail -n +${LAST_ENDIF} "$PSF" >> "$PSF.tmp"
+          mv "$PSF.tmp" "$PSF"
 
           # 2. AppleClang's libc++ has NO std::execution policies at all.
           #    Neuter the declaration; strip the leading 'parallel,' argument
