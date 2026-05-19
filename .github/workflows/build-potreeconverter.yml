@@ -1,4 +1,4 @@
-name: Build PotreeConverter
+name: Build Scan2BIM Converter
 
 on:
   workflow_dispatch:
@@ -20,44 +20,13 @@ jobs:
         working-directory: PotreeConverter
         run: |
           set -euxo pipefail
-
-          # 1. unsuck_platform_specific.cpp only handles Windows + Linux. Make
-          #    the Linux block apply on macOS, then alias the *64 stdio
-          #    functions to their plain counterparts (macOS fseeko is already
-          #    64-bit, no separate fseeko64 exists).
           PSF=Converter/modules/unsuck/unsuck_platform_specific.cpp
           sed -i.bak 's/#elif defined(__linux__)/#elif defined(__linux__) || defined(__APPLE__)/' "$PSF"
-          # Apply *64 -> plain on the just-enabled block. macOS doesn't have
-          # the *64 variants; Linux still does but it also accepts the plain
-          # ones (which are 64-bit on Linux when _FILE_OFFSET_BITS=64). Safe
-          # global replace.
           sed -i.bak2 's/fseeko64/fseeko/g; s/ftello64/ftello/g; s/fopen64/fopen/g' "$PSF"
-
-          # 2. AppleClang's libc++ ships <execution> but not the par /
-          #    par_unseq policies (those need TBB-backed parallel algorithms
-          #    that Apple doesn't link). Replace with seq for a serial fallback.
           find Converter -type f \( -name '*.h' -o -name '*.hpp' -o -name '*.cpp' \) -print0 \
             | xargs -0 sed -i.bak3 -e 's/std::execution::par_unseq/std::execution::seq/g' \
                                    -e 's/std::execution::par\b/std::execution::seq/g'
-
-          # 3. AppleClang flags narrowing int64->int32 conversions in the
-          #    Point aggregate initializer in sampler_poisson.h. Cast explicitly.
           sed -i.bak4 's/Point point = { x, y, z, i, childIndex };/Point point = { x, y, z, static_cast<int32_t>(i), static_cast<int32_t>(childIndex) };/' Converter/include/sampler_poisson.h
-
-      - name: Diagnose TBB layout
-        run: |
-          echo "=== brew prefix ==="
-          brew --prefix
-          echo "=== brew --prefix tbb ==="
-          brew --prefix tbb
-          echo "=== brew info tbb ==="
-          brew info tbb || true
-          echo "=== ls tbb cellar lib ==="
-          ls -la "$(brew --prefix tbb)/lib/" 2>&1 | head -20
-          echo "=== look for TBBConfig.cmake / tbb-config.cmake anywhere under tbb prefix ==="
-          find "$(brew --prefix tbb)" -name '*Config.cmake' -o -name '*config.cmake' 2>/dev/null | head -20
-          echo "=== look for TBB cmake under homebrew prefix ==="
-          find "$(brew --prefix)" -name 'TBBConfig.cmake' 2>/dev/null | head -10
 
       - name: Configure
         working-directory: PotreeConverter
@@ -68,7 +37,6 @@ jobs:
           for cand in "$TBB_PREFIX/lib/cmake/TBB" "$TBB_PREFIX/lib/cmake/tbb" "$TBB_PREFIX/lib/cmake"; do
             if [ -d "$cand" ]; then TBB_CMAKE_DIR="$cand"; break; fi
           done
-          echo "Using BREW_PREFIX=$BREW_PREFIX  TBB_PREFIX=$TBB_PREFIX  TBB_CMAKE_DIR=$TBB_CMAKE_DIR"
           CMAKE_ARGS=(
             -B build
             -DCMAKE_BUILD_TYPE=Release
@@ -76,9 +44,7 @@ jobs:
             -DCMAKE_POLICY_VERSION_MINIMUM=3.5
             "-DCMAKE_PREFIX_PATH=$TBB_PREFIX;$BREW_PREFIX"
           )
-          if [ -n "$TBB_CMAKE_DIR" ]; then
-            CMAKE_ARGS+=("-DTBB_DIR=$TBB_CMAKE_DIR")
-          fi
+          if [ -n "$TBB_CMAKE_DIR" ]; then CMAKE_ARGS+=("-DTBB_DIR=$TBB_CMAKE_DIR"); fi
           cmake "${CMAKE_ARGS[@]}"
 
       - name: Build
@@ -89,12 +55,10 @@ jobs:
         working-directory: PotreeConverter
         run: |
           set -e
-          ls -la build
           mkdir -p dist
           cp build/PotreeConverter dist/
-          if [ -d build/resources ]; then cp -R build/resources dist/; fi
-          if [ -d build/licenses ]; then cp -R build/licenses dist/; fi
-          if [ -f build/README.md ]; then cp build/README.md dist/; fi
+          [ -d build/resources ] && cp -R build/resources dist/ || true
+          [ -d build/licenses ]  && cp -R build/licenses dist/ || true
           ls -la dist
 
       - name: Upload PotreeConverter (macOS ARM)
@@ -125,12 +89,10 @@ jobs:
         working-directory: PotreeConverter
         run: |
           set -e
-          ls -la build
           mkdir -p dist
           cp build/PotreeConverter dist/
-          if [ -d build/resources ]; then cp -R build/resources dist/; fi
-          if [ -d build/licenses ]; then cp -R build/licenses dist/; fi
-          if [ -f build/README.md ]; then cp build/README.md dist/; fi
+          [ -d build/resources ] && cp -R build/resources dist/ || true
+          [ -d build/licenses ]  && cp -R build/licenses dist/ || true
           ls -la dist
 
       - name: Upload PotreeConverter (Linux x64)
@@ -138,4 +100,123 @@ jobs:
         with:
           name: potreeconverter-linux-x64
           path: PotreeConverter/dist/
+          retention-days: 90
+
+  build-app-linux:
+    needs: build-linux-x64
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Node
+        uses: actions/setup-node@v4
+        with: { node-version: '20' }
+
+      - name: Install Tauri system deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libssl-dev \
+            librsvg2-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            patchelf
+
+      - name: Install Miniforge
+        run: |
+          wget -q https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-x86_64.sh -O miniforge.sh
+          bash miniforge.sh -b -p $HOME/miniforge
+          echo "$HOME/miniforge/bin" >> $GITHUB_PATH
+
+      - name: Install PDAL via conda
+        run: $HOME/miniforge/bin/conda create -p ./pdal-env -c conda-forge pdal --yes --quiet
+
+      - name: Download PotreeConverter artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: potreeconverter-linux-x64
+          path: ./binaries-linux/
+
+      - name: Stage binaries
+        run: |
+          chmod +x ./binaries-linux/PotreeConverter
+          mkdir -p binaries-linux/pdal/bin binaries-linux/pdal/lib binaries-linux/pdal/share
+          cp ./pdal-env/bin/pdal binaries-linux/pdal/bin/
+          cp -aL ./pdal-env/lib/. binaries-linux/pdal/lib/
+          cp -R ./pdal-env/share/gdal binaries-linux/pdal/share/  || true
+          cp -R ./pdal-env/share/proj binaries-linux/pdal/share/  || true
+          du -sh binaries-linux
+
+      - name: npm install
+        run: npm install --no-audit --no-fund
+
+      - name: Build Tauri release
+        run: npm run build
+
+      - name: Package portable tar.gz
+        run: bash scripts/package-linux.sh
+
+      - name: Upload final Linux portable
+        uses: actions/upload-artifact@v4
+        with:
+          name: scan2bim-converter-linux-x64
+          path: dist/*.tar.gz
+          retention-days: 90
+
+  build-app-macos:
+    needs: build-macos-arm
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Node
+        uses: actions/setup-node@v4
+        with: { node-version: '20' }
+
+      - name: Install Miniforge
+        run: |
+          curl -sL https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-MacOSX-arm64.sh -o miniforge.sh
+          bash miniforge.sh -b -p $HOME/miniforge
+          echo "$HOME/miniforge/bin" >> $GITHUB_PATH
+
+      - name: Install PDAL via conda
+        run: $HOME/miniforge/bin/conda create -p ./pdal-env -c conda-forge pdal --yes --quiet
+
+      - name: Download PotreeConverter artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: potreeconverter-darwin-arm64
+          path: ./binaries-mac/
+
+      - name: Stage binaries
+        run: |
+          chmod +x ./binaries-mac/PotreeConverter
+          mkdir -p binaries-mac/pdal/bin binaries-mac/pdal/lib binaries-mac/pdal/share
+          cp ./pdal-env/bin/pdal binaries-mac/pdal/bin/
+          cp -aL ./pdal-env/lib/. binaries-mac/pdal/lib/
+          cp -R ./pdal-env/share/gdal binaries-mac/pdal/share/ || true
+          cp -R ./pdal-env/share/proj binaries-mac/pdal/share/ || true
+          du -sh binaries-mac
+
+      - name: npm install
+        run: npm install --no-audit --no-fund
+
+      - name: Build Tauri release
+        run: npm run build
+
+      - name: Package portable zip
+        run: bash scripts/package-macos.sh
+
+      - name: Upload final macOS portable
+        uses: actions/upload-artifact@v4
+        with:
+          name: scan2bim-converter-macos-arm64
+          path: dist/*.zip
           retention-days: 90
