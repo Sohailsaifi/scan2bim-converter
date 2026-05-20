@@ -30,24 +30,24 @@ jobs:
           # 1b. unsuck_platform_specific.cpp: do NOT widen the Linux block,
           #     it uses sys/sysinfo.h and /proc/self/status which don't exist
           #     on macOS. Instead, insert a fresh #elif __APPLE__ block right
-          #     before the final #endif with stub implementations of the public
-          #     symbols (getMemoryData/printMemoryReport/launchMemoryChecker/
-          #     init/getCpuData). PotreeConverter still runs end-to-end on
-          #     macOS; only the live RAM/CPU stat readouts are no-ops.
+          #     before the final #endif with stub implementations. echo lines
+          #     used instead of a heredoc so YAML's block-scalar indentation
+          #     stays consistent.
           PSF=Converter/modules/unsuck/unsuck_platform_specific.cpp
           LAST_ENDIF=$(grep -n '^#endif' "$PSF" | tail -1 | cut -d: -f1)
-          head -n $((LAST_ENDIF - 1)) "$PSF" > "$PSF.tmp"
-          cat <<'STUBS' >> "$PSF.tmp"
-
-#elif defined(__APPLE__)
-// macOS stubs - no live memory / CPU stats but everything else works.
-MemoryData getMemoryData() { return MemoryData{}; }
-void printMemoryReport() {}
-void launchMemoryChecker(int64_t maxMB, double checkInterval) {}
-void init() {}
-CpuData getCpuData() { return CpuData{}; }
-STUBS
-          tail -n +${LAST_ENDIF} "$PSF" >> "$PSF.tmp"
+          {
+            head -n $((LAST_ENDIF - 1)) "$PSF"
+            echo ""
+            echo "#elif defined(__APPLE__)"
+            echo "// macOS stubs - no live memory / CPU stats."
+            echo "MemoryData getMemoryData() { return MemoryData{}; }"
+            echo "void printMemoryReport() {}"
+            echo "void launchMemoryChecker(int64_t maxMB, double checkInterval) {}"
+            echo "void init() {}"
+            echo "CpuData getCpuData() { return CpuData{}; }"
+            echo ""
+            tail -n +${LAST_ENDIF} "$PSF"
+          } > "$PSF.tmp"
           mv "$PSF.tmp" "$PSF"
 
           # 2. AppleClang's libc++ has NO std::execution policies at all.
