@@ -5,8 +5,10 @@ on:
   push:
     paths:
       - .github/workflows/build-potreeconverter.yml
-      - scripts/package-linux.sh
-      - scripts/package-macos.sh
+      - scripts/**
+      - src-tauri/**
+      - renderer/**
+      - package.json
 
 jobs:
   build-macos-arm:

@@ -29,6 +29,12 @@ const i18n = {
     'remaining.suffix': 'verbleibend',
     'points.short': 'Punkte',
     'pointsRate.short': 'Pkt/s',
+    'stat.size': 'GRÖSSE',
+    'stat.scans': 'SCANS',
+    'stat.points': 'PUNKTE',
+    'stat.duration': 'DAUER',
+    'stat.output': 'AUSGABE',
+    'options': 'Optionen',
   },
   en: {
     'drop.idle': 'Drop point cloud here',
@@ -56,6 +62,12 @@ const i18n = {
     'remaining.suffix': 'remaining',
     'points.short': 'points',
     'pointsRate.short': 'pts/s',
+    'stat.size': 'SIZE',
+    'stat.scans': 'SCANS',
+    'stat.points': 'POINTS',
+    'stat.duration': 'DURATION',
+    'stat.output': 'OUTPUT',
+    'options': 'Options',
   },
 };
 

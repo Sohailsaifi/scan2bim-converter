@@ -212,8 +212,8 @@ async fn run_pdal_translate(
         StageError::Failed("pdal_spawn_failed".into(), e.to_string())
     })?;
 
-    pipe_lines("pdal stdout", child.stdout.take().unwrap());
-    pipe_lines("pdal stderr", child.stderr.take().unwrap());
+    pipe_lines(app, "pdal stdout", child.stdout.take().unwrap());
+    pipe_lines(app, "pdal stderr", child.stderr.take().unwrap());
 
     let total_points_est = estimate_points(input);
     let input_bytes = std::fs::metadata(input).map(|m| m.len()).unwrap_or(0);
@@ -319,7 +319,7 @@ async fn run_potree_converter(
         StageError::Failed("potree_spawn_failed".into(), e.to_string())
     })?;
 
-    pipe_lines("potree stderr", child.stderr.take().unwrap());
+    pipe_lines(app, "potree stderr", child.stderr.take().unwrap());
 
     let stdout = child.stdout.take().unwrap();
     let mut lines = BufReader::new(stdout).lines();
@@ -336,6 +336,7 @@ async fn run_potree_converter(
                 match line_res {
                     Ok(Some(l)) => {
                         eprintln!("[potree stdout] {}", l);
+                        let _ = app.emit("convert:log", format!("[potree stdout] {}", l));
                         if let Some(p) = parse_percent(&l) { last_percent = p; }
                         let stage_elapsed = stage_started.elapsed().as_millis() as u64;
                         let pts_done = ((last_percent / 100.0) * total_points as f64) as u64;
@@ -406,11 +407,13 @@ async fn poll_with_cancel(child: &mut Child, cancel: &Arc<AtomicBool>) -> WaitOu
     }
 }
 
-fn pipe_lines(tag: &'static str, stream: impl tokio::io::AsyncRead + Unpin + Send + 'static) {
+fn pipe_lines(app: &AppHandle, tag: &'static str, stream: impl tokio::io::AsyncRead + Unpin + Send + 'static) {
+    let app = app.clone();
     tokio::spawn(async move {
         let mut lines = BufReader::new(stream).lines();
         while let Ok(Some(line)) = lines.next_line().await {
             eprintln!("[{}] {}", tag, line);
+            let _ = app.emit("convert:log", format!("[{}] {}", tag, line));
         }
     });
 }
