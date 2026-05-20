@@ -27,6 +27,13 @@ else
   echo "WARN: no PotreeConverter binary found under binaries-linux/"
 fi
 
+# Copy ALL shared libs from binaries-linux/ root (laszip etc.) so the
+# dynamic linker finds them next to PotreeConverter. cp -L dereferences
+# symlinks so versioned files are copied as their target content.
+for f in "$root"/binaries-linux/*.so "$root"/binaries-linux/*.so.*; do
+  [ -f "$f" ] && cp -L "$f" "$stage/binaries/" || true
+done
+
 [ -d "$root/binaries-linux/resources" ] && cp -R "$root/binaries-linux/resources" "$stage/binaries/" || true
 [ -d "$root/binaries-linux/licenses" ]  && cp -R "$root/binaries-linux/licenses"  "$stage/binaries/" || true
 

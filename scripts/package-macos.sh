@@ -27,6 +27,12 @@ else
   echo "WARN: no PotreeConverter binary found under binaries-mac/"
 fi
 
+# Copy ALL .dylib siblings (laszip etc.) so the dynamic loader finds
+# them next to PotreeConverter at runtime.
+for f in "$root"/binaries-mac/*.dylib; do
+  [ -f "$f" ] && cp -L "$f" "$stage/binaries/" || true
+done
+
 [ -d "$root/binaries-mac/resources" ] && cp -R "$root/binaries-mac/resources" "$stage/binaries/" || true
 [ -d "$root/binaries-mac/licenses" ]  && cp -R "$root/binaries-mac/licenses"  "$stage/binaries/" || true
 
