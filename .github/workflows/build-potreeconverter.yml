@@ -76,6 +76,15 @@ jobs:
           # 3. Narrowing fix in sampler_poisson.h.
           sed -i.bak5 's/Point point = { x, y, z, i, childIndex };/Point point = { x, y, z, static_cast<int32_t>(i), static_cast<int32_t>(childIndex) };/' Converter/include/sampler_poisson.h
 
+          # 4. Drop the TBB link line from CMakeLists.txt. Since we removed
+          #    all std::execution usage in step 2, libtbb is dead weight on
+          #    macOS - and the bare 'tbb' name fails to resolve to Homebrew's
+          #    libtbb.dylib at link time. Same logic: also relax the
+          #    find_package(TBB REQUIRED) to optional, so cmake doesn't fail
+          #    if tbb isn't installed at all.
+          sed -i.bak6 's|target_link_libraries(${PROJECT_NAME} tbb)|# tbb link removed on macOS (std::execution stripped at source level)|' CMakeLists.txt
+          sed -i.bak7 's|find_package(TBB REQUIRED)|find_package(TBB)|' CMakeLists.txt
+
           # 4. Drop the noisy *.bak files so sanity grep + the eventual
           #    build don't include them.
           find Converter -name '*.bak*' -delete
