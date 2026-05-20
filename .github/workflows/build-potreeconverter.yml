@@ -5,6 +5,8 @@ on:
   push:
     paths:
       - .github/workflows/build-potreeconverter.yml
+      - scripts/package-linux.sh
+      - scripts/package-macos.sh
 
 jobs:
   build-macos-arm:
