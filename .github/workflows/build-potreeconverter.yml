@@ -133,12 +133,66 @@ jobs:
           set -e
           mkdir -p dist
           cp build/PotreeConverter dist/
-          # Collect every runtime shared lib produced during the build
-          # (laszip etc. live deeper in build/Converter/libs/...).
+          # Collect every runtime shared lib produced during the build.
           find build -name '*.dylib' -exec cp {} dist/ \;
           [ -d build/resources ] && cp -R build/resources dist/ || true
           [ -d build/licenses ]  && cp -R build/licenses dist/ || true
-          ls -la dist
+
+          echo "=== otool -L PotreeConverter (before rewriting) ==="
+          otool -L dist/PotreeConverter || true
+
+          # macOS dyld doesn't auto-search the binary's own directory. The
+          # absolute build-time paths in PotreeConverter and its sibling
+          # dylibs would fail at runtime in a different location. Fix the
+          # bundle to be self-contained:
+          #   1. Each dylib in dist/ gets its install_name rewritten to
+          #      @rpath/<basename> so consumers reference it by name only.
+          #   2. PotreeConverter gets every absolute reference to a bundled
+          #      dylib rewritten to @rpath/<basename>.
+          #   3. PotreeConverter gets @loader_path added as an RPATH so
+          #      @rpath/... resolves to siblings of the binary.
+          cd dist
+          for dy in *.dylib; do
+            [ -f "$dy" ] || continue
+            install_name_tool -id "@rpath/$(basename "$dy")" "$dy" || true
+          done
+
+          # Rewrite each ABS path in PotreeConverter that points to one of
+          # our bundled dylibs to @rpath/<basename>.
+          for dy in *.dylib; do
+            [ -f "$dy" ] || continue
+            base="$(basename "$dy")"
+            otool -L PotreeConverter | tail -n +2 | awk '{print $1}' | while read -r ref; do
+              if [ "$(basename "$ref")" = "$base" ] && [ "$ref" != "@rpath/$base" ]; then
+                install_name_tool -change "$ref" "@rpath/$base" PotreeConverter || true
+              fi
+            done
+          done
+
+          install_name_tool -add_rpath "@loader_path" PotreeConverter 2>/dev/null || true
+
+          # Walk otool one more time to surface any remaining non-system
+          # absolute references, and copy those dylibs into dist/ + rewrite.
+          # System frameworks (/usr/lib/...) and /System/... we skip.
+          otool -L PotreeConverter | tail -n +2 | awk '{print $1}' | while read -r ref; do
+            [ -z "$ref" ] && continue
+            case "$ref" in
+              /usr/lib/*|/System/*|@*) ;;
+              *)
+                if [ -f "$ref" ]; then
+                  cp -L "$ref" .
+                  base="$(basename "$ref")"
+                  install_name_tool -id "@rpath/$base" "$base" || true
+                  install_name_tool -change "$ref" "@rpath/$base" PotreeConverter || true
+                fi
+                ;;
+            esac
+          done
+
+          echo "=== otool -L PotreeConverter (after rewriting) ==="
+          otool -L PotreeConverter || true
+          echo "=== final dist/ contents ==="
+          ls -la
 
       - name: Upload PotreeConverter (macOS ARM)
         uses: actions/upload-artifact@v4
