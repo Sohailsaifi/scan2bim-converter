@@ -172,8 +172,30 @@ jobs:
           cp build/PotreeConverter dist/
           # Collect every runtime shared lib produced during the build
           # (laszip etc. live deeper in build/Converter/libs/...).
-          find build -name '*.so' -exec cp {} dist/ \;
-          find build -name '*.so.*' -exec cp {} dist/ \;
+          find build -name '*.so' -exec cp -L {} dist/ \;
+          find build -name '*.so.*' -exec cp -L {} dist/ \;
+
+          # PotreeConverter also dynamically links libtbb (apt libtbb-dev on
+          # Ubuntu CI). It's not produced by the build, it lives in
+          # /usr/lib/x86_64-linux-gnu/. Walk ldd output and copy any non-
+          # system shared lib the binary needs. Skip standard glibc / libstdc++
+          # / kernel libs.
+          echo "=== ldd PotreeConverter ==="
+          ldd build/PotreeConverter || true
+          ldd build/PotreeConverter 2>/dev/null | awk '/=>/ {print $3}' | while read lib; do
+            [ -z "$lib" ] && continue
+            [ ! -f "$lib" ] && continue
+            base="$(basename "$lib")"
+            case "$base" in
+              libc.so.*|libm.so.*|libdl.so.*|libpthread.so.*|librt.so.*|ld-linux-*|libgcc_s.so.*|libstdc++.so.*|linux-vdso.so.*)
+                # core glibc / runtime - assume present on any Linux target
+                ;;
+              *)
+                cp -L "$lib" dist/ 2>/dev/null || true
+                ;;
+            esac
+          done
+
           [ -d build/resources ] && cp -R build/resources dist/ || true
           [ -d build/licenses ]  && cp -R build/licenses dist/ || true
           ls -la dist

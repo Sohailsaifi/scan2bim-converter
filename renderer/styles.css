@@ -330,14 +330,7 @@ button { font-family: inherit; cursor: pointer; }
 }
 
 .options-toggle {
-  margin-top: 6px;
-  font-size: 11px;
-}
-
-.options-toggle .arrow {
-  display: inline-block;
-  margin-left: 2px;
-  font-size: 9px;
+  display: none;
 }
 
 .running-header {

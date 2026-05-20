@@ -342,7 +342,16 @@ function showLogs() {
   const modal = document.createElement('div');
   modal.id = 'logs-modal';
   modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:9999;display:flex;align-items:center;justify-content:center;padding:24px;';
-  const body = logBuffer.length ? logBuffer.join('\n') : '(no log lines captured yet)';
+  let body;
+  if (logBuffer.length) {
+    body = logBuffer.join('\n');
+  } else if (currentState === 'running') {
+    body = '(no output from the converter yet — PDAL is silent during E57 reading, this is normal)';
+  } else if (currentState === 'idle' || currentState === 'ready') {
+    body = '(start a conversion to see PDAL and PotreeConverter output here)';
+  } else {
+    body = '(no log lines captured)';
+  }
   modal.innerHTML = `
     <div style="background:#1a1410;color:#f5eed7;border:1px solid #3a2820;border-radius:12px;width:100%;max-width:520px;max-height:80vh;display:flex;flex-direction:column;font-family:Manrope,sans-serif;box-shadow:0 8px 40px rgba(0,0,0,0.6);">
       <div style="padding:14px 18px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #3a2820;">
