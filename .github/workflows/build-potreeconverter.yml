@@ -131,6 +131,9 @@ jobs:
           set -e
           mkdir -p dist
           cp build/PotreeConverter dist/
+          # Collect every runtime shared lib produced during the build
+          # (laszip etc. live deeper in build/Converter/libs/...).
+          find build -name '*.dylib' -exec cp {} dist/ \;
           [ -d build/resources ] && cp -R build/resources dist/ || true
           [ -d build/licenses ]  && cp -R build/licenses dist/ || true
           ls -la dist
@@ -165,6 +168,10 @@ jobs:
           set -e
           mkdir -p dist
           cp build/PotreeConverter dist/
+          # Collect every runtime shared lib produced during the build
+          # (laszip etc. live deeper in build/Converter/libs/...).
+          find build -name '*.so' -exec cp {} dist/ \;
+          find build -name '*.so.*' -exec cp {} dist/ \;
           [ -d build/resources ] && cp -R build/resources dist/ || true
           [ -d build/licenses ]  && cp -R build/licenses dist/ || true
           ls -la dist

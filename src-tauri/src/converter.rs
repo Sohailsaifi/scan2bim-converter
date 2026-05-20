@@ -312,6 +312,7 @@ async fn run_potree_converter(
         .arg("--encoding").arg("BROTLI")
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped());
+    apply_potree_env(&mut potree_cmd, binary);
     hide_console(&mut potree_cmd);
     let mut child = potree_cmd.spawn().map_err(|e| {
         eprintln!("[potree] SPAWN FAILED: {}", e);
@@ -412,6 +413,26 @@ fn pipe_lines(tag: &'static str, stream: impl tokio::io::AsyncRead + Unpin + Sen
             eprintln!("[{}] {}", tag, line);
         }
     });
+}
+
+fn apply_potree_env(cmd: &mut Command, binary: &Path) {
+    if let Some(parent) = binary.parent() {
+        let parent_str = parent.to_string_lossy().to_string();
+        #[cfg(target_os = "linux")]
+        {
+            let existing = std::env::var("LD_LIBRARY_PATH").unwrap_or_default();
+            let new_val = if existing.is_empty() { parent_str.clone() } else { format!("{}:{}", parent_str, existing) };
+            cmd.env("LD_LIBRARY_PATH", new_val);
+        }
+        #[cfg(target_os = "macos")]
+        {
+            let existing = std::env::var("DYLD_LIBRARY_PATH").unwrap_or_default();
+            let new_val = if existing.is_empty() { parent_str.clone() } else { format!("{}:{}", parent_str, existing) };
+            cmd.env("DYLD_LIBRARY_PATH", new_val);
+        }
+        #[cfg(target_os = "windows")]
+        { let _ = parent_str; }
+    }
 }
 
 fn apply_pdal_env(cmd: &mut Command, pdal_binary: &Path) {

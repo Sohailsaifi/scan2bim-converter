@@ -317,8 +317,36 @@ document.getElementById('retryBtn').addEventListener('click', () => {
   setState(inputFile && outputDir ? 'ready' : 'idle');
 });
 
-document.getElementById('openLogsBtn').addEventListener('click', () => {});
-document.getElementById('logsBtn').addEventListener('click', () => {});
+const logBuffer = [];
+const MAX_LOG_LINES = 500;
+listen('convert:log', (e) => {
+  logBuffer.push(String(e.payload));
+  if (logBuffer.length > MAX_LOG_LINES) logBuffer.splice(0, logBuffer.length - MAX_LOG_LINES);
+});
+
+function showLogs() {
+  const existing = document.getElementById('logs-modal');
+  if (existing) { existing.remove(); return; }
+  const modal = document.createElement('div');
+  modal.id = 'logs-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:9999;display:flex;align-items:center;justify-content:center;padding:24px;';
+  const body = logBuffer.length ? logBuffer.join('\n') : '(no log lines captured yet)';
+  modal.innerHTML = `
+    <div style="background:#1a1410;color:#f5eed7;border:1px solid #3a2820;border-radius:12px;width:100%;max-width:520px;max-height:80vh;display:flex;flex-direction:column;font-family:Manrope,sans-serif;box-shadow:0 8px 40px rgba(0,0,0,0.6);">
+      <div style="padding:14px 18px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #3a2820;">
+        <strong style="font-size:13px;letter-spacing:1px;">CONVERSION LOG</strong>
+        <button id="logs-close" style="background:transparent;color:#f5eed7;border:1px solid #3a2820;border-radius:6px;padding:4px 10px;cursor:pointer;font-family:Manrope,sans-serif;">Close</button>
+      </div>
+      <pre style="margin:0;padding:14px 18px;flex:1;overflow:auto;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11px;line-height:1.5;white-space:pre-wrap;word-break:break-all;color:#cfc7b8;"></pre>
+    </div>`;
+  document.body.appendChild(modal);
+  modal.querySelector('pre').textContent = body;
+  modal.querySelector('#logs-close').addEventListener('click', () => modal.remove());
+  modal.addEventListener('click', (ev) => { if (ev.target === modal) modal.remove(); });
+}
+
+document.getElementById('openLogsBtn').addEventListener('click', showLogs);
+document.getElementById('logsBtn').addEventListener('click', showLogs);
 
 applyInitialLang();
 applyI18n();
