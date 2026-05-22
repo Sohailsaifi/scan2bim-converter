@@ -436,9 +436,18 @@ jobs:
       - name: npm install
         run: npm install --no-audit --no-fund
 
-      - name: Build Tauri release with webkit2gtk-4-0
-        working-directory: src-tauri
-        run: cargo build --release --features ubuntu20
+      - name: Patch Cargo.toml to force wry webkit2gtk-4-0 (Ubuntu 20.04 only)
+        run: |
+          {
+            echo ""
+            echo "[patch.crates-io]"
+            echo 'wry = { git = "https://github.com/tauri-apps/wry", tag = "wry-v0.46.3", default-features = false, features = ["drag-drop", "protocol", "os-webview", "webkit2gtk-4-0"] }'
+          } >> src-tauri/Cargo.toml
+          echo "=== src-tauri/Cargo.toml tail after patch ==="
+          tail -10 src-tauri/Cargo.toml
+
+      - name: Build Tauri release
+        run: npm run build
 
       - name: Package portable tar.gz
         run: bash scripts/package-linux.sh
