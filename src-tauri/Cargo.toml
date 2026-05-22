@@ -25,6 +25,17 @@ sysinfo = "0.32"
 uuid = { version = "1", features = ["v4"] }
 once_cell = "1"
 
+# Linux-only: by default Tauri 2 links against webkit2gtk-4.1 (Ubuntu 22.04+).
+# When the ubuntu20 cargo feature is on we instead force wry to use the
+# older webkit2gtk-4.0 line so the binary runs on Ubuntu 20.04 hosts.
+# Selected from CI via 'cargo build --release --features ubuntu20'.
+[target.'cfg(target_os = "linux")'.dependencies]
+wry = { version = "0.46", optional = true }
+
+[features]
+default = []
+ubuntu20 = ["wry/webkit2gtk-4-0"]
+
 [profile.release]
 opt-level = 3
 codegen-units = 16
