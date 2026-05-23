@@ -145,15 +145,6 @@ function fmtRemaining(ms) {
 
 const appWindow = getCurrentWindow();
 
-document.querySelectorAll('.dot').forEach((el) => {
-  el.addEventListener('click', async () => {
-    const action = el.dataset.action;
-    if (action === 'minimize') await appWindow.minimize();
-    else if (action === 'maximize') await appWindow.toggleMaximize();
-    else if (action === 'close') await appWindow.close();
-  });
-});
-
 document.querySelectorAll('.lang-opt').forEach((el) => {
   el.addEventListener('click', () => {
     document.querySelectorAll('.lang-opt').forEach((x) => x.classList.remove('active'));
