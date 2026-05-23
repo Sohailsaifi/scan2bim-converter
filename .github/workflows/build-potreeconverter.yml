@@ -337,6 +337,10 @@ jobs:
               -name 'libgrpc*.so*' -o \
               -name 'libgpr*.so*' -o \
               -name 'libabsl_*.so*' \) -type f -print -delete 2>/dev/null || true
+          # Clean up the symlinks that point at the libs we just deleted.
+          # Otherwise the next step's 'cp -aL' will try to dereference them
+          # and fail.
+          find . -xtype l -print -delete 2>/dev/null || true
           du -sh . || true
           cd -
 
