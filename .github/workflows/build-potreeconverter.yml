@@ -318,6 +318,28 @@ jobs:
       - name: Install PDAL via conda
         run: $HOME/miniforge/bin/conda create -p ./pdal-env -c conda-forge pdal --yes --quiet
 
+      - name: Trim PDAL bundle (Linux)
+        run: |
+          set -x
+          cd ./pdal-env/lib
+          du -sh . || true
+          # MKL is the Intel math kernel library, pulled in by numpy. The
+          # pdal CLI is pure C++ and never touches numpy / MKL. Cutting it
+          # is the single biggest size win, matches what we did on Windows.
+          find . -name 'libmkl_*.so*' -type f -print -delete 2>/dev/null || true
+          # Cloud SDKs (AWS, Azure, Google) PDAL only uses for fetching
+          # files from cloud storage, which we don't do. Cut.
+          find . \( \
+              -name 'libaws*.so*' -o \
+              -name 'libazure*.so*' -o \
+              -name 'libgoogle_cloud_*.so*' -o \
+              -name 'libgoogleapis_*.so*' -o \
+              -name 'libgrpc*.so*' -o \
+              -name 'libgpr*.so*' -o \
+              -name 'libabsl_*.so*' \) -type f -print -delete 2>/dev/null || true
+          du -sh . || true
+          cd -
+
       - name: Download PotreeConverter artifact
         uses: actions/download-artifact@v4
         with:
